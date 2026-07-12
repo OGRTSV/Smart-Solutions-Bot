@@ -60,7 +60,7 @@ async def show_history(user_id: int, message: types.Message, offset: int = 0):
         "📖 *Легенда:*",
         "✅ — есть результат, можно посмотреть",
         "📭 — ничего не нашли (чисто, не ошибка)",
-        "⛔ — пользователь сам отменил",
+        "⛔ — отменен",
         "❌ — что-то пошло не так\n",
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     ]
@@ -215,27 +215,19 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
             # Поиск прошёл успешно, но ничего не нашли
             status_icon = "📭"
             title = "Нет данных по запросу"
-            error_message = "По данному запросу ничего не найдено в источниках"
         elif status in ('error', 'parser_error'):
             # Настоящая ошибка (сеть, API, сбой)
             status_icon = "❌"
             title = "Ошибка при запросе"
-            error_messages = {
-                'error': 'Произошла ошибка при обращении к источнику',
-                'parser_error': 'Ошибка при обработке ответа от источника'
-            }
-            error_message = error_messages.get(status, 'Неизвестная ошибка')
         else:
             status_icon = "❌"
             title = "Нет данных"
-            error_message = "Результаты отсутствуют"
 
         await callback.message.answer(
             f"{status_icon} *{title}*\n\n"
             f"🔹 Тип: `{search_type}`\n"
             f"🔹 Значение: `{search_value}`\n"
-            f"📅 _Дата запроса: {created_formatted}_\n\n"
-            f"_Причина: {error_message}_",
+            f"📅 _Дата запроса: {created_formatted}_\n\n",
             parse_mode="Markdown",
             reply_markup=get_main_keyboard()
         )
