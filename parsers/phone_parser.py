@@ -16,13 +16,14 @@ async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> di
     """
     Поиск организаций по номеру телефона через list-org.com
     """
+
     # Импорты исключений selenium для корректной обработки
     from selenium.common.exceptions import TimeoutException, WebDriverException
 
     results = []
     seen_links = set()
 
-    driver = None  # Объявляем driver снаружи try для надёжного закрытия
+    driver = None  # Объявление driverа снаружи от try (для надёжного закрытия)
 
     try:
         chrome_options = Options()
@@ -45,11 +46,12 @@ async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> di
                 options=chrome_options
             )
         )
+
         driver.set_page_load_timeout(60)
         driver.implicitly_wait(10)
 
         try:
-            # Очищаем номер от лишних символов
+            # Очистка номера от лишних символов
             clean_phone = re.sub(r'\D', '', phone)
             if clean_phone.startswith('7'):
                 clean_phone = '+' + clean_phone
@@ -75,15 +77,16 @@ async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> di
             # Обработка таймаутов и отсутствия результатов отдельно
             results_present = False
             try:
-                # Пробуем дождаться результатов максимум 15 секунд
+                # Пробуем дождаться результатов через 15 секунд (после - превышение таймаута)
                 results_present = await loop.run_in_executor(
                     None,
                     lambda: WebDriverWait(driver, 15).until(
                         lambda d: bool(d.find_elements(By.CSS_SELECTOR, "a[href*='/company/']"))
                     )
                 )
+
             except TimeoutException:
-                # Таймаут — это НЕ ошибка. Скорее всего, просто нет результатов.
+                # Таймаут (НЕ ошибка). Скорее всего, просто нет результатов
                 logging.info(f"Таймаут ожидания результатов для {phone} (вероятно, ничего не найдено)")
                 results_present = False
             except WebDriverException as e:
@@ -113,8 +116,8 @@ async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> di
                     "message": "Организации с таким номером не найдены"
                 }
 
-            # Если и таймаут был, и явного "не найдено" нет, но и результатов нет
-            # → скорее всего это и есть "ничего не найдено", но без надписи
+            # Если и таймаут был, и явного "не найдено" нет, но и результатов нет,
+            # то, скорее всего это и есть "ничего не найдено", но без надписи
             links = soup.find_all('a', href=re.compile(r'/company/\d+'))
             if not links:
                 logging.info(f"Ссылок на компании не найдено для {phone}")
@@ -124,7 +127,7 @@ async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> di
                     "message": "Организации с таким номером не найдены"
                 }
 
-            # Парсим результаты (тот же блок, что и раньше)
+            # Парсинг результатов (тот же блок, что и раньше)
             for link_elem in links:
                 if cancel_event and cancel_event.is_set():
                     return {"found": False, "message": "Поиск отменен", "cancelled": True, "results": results}
@@ -221,7 +224,8 @@ async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> di
     except Exception as e:
         # Сюда попадаем ТОЛЬКО при критических сбоях (не при отсутствии результата!)
         logging.error(f"Критическая ошибка при поиске по телефону {phone}: {e}", exc_info=True)
-        # Гарантированно закрываем браузер, если остался открытым
+
+        # Закрываем браузер, если остался открытым
         if driver is not None:
             try:
                 loop = asyncio.get_event_loop()

@@ -14,6 +14,7 @@ from utils.keyboards import get_main_keyboard, get_cancel_keyboard
 from utils.excel_generator import create_excel_file_fns
 from parsers.fns_parser import search_fns
 from core import bot, user_last_search, cancel_events, pending_cache_queries
+from utils.ai_analyzer import analyze_search_results
 
 # Импорты для работы с базой данных
 from utils.database import (
@@ -28,19 +29,22 @@ from utils.database import (
 
 router = Router()
 
+# Хранилище последних результатов для AI-анализа (user_id -> данные)
+ai_analysis_data = {}
+
 
 @router.message(SearchStates.waiting_for_fns, lambda message: message.text and not message.text.startswith('/'))
 async def process_fns_input(message: types.Message, state: FSMContext):
     """Обработчик ввода ФИО для поиска в ФНС (ЕГРЮЛ/ЕГРИП)."""
 
-    # 🆕 ОТЛАДКА: проверяем, вызывается ли функция
+    # ОТЛАДКА: проверяем, вызывается ли функция. Просто для удостоверенности
     print(f"🔍 [DEBUG] process_fns_input вызвана! Текст: '{message.text}'")
     print(f"🔍 [DEBUG] Состояние FSM: {await state.get_state()}")
 
     user_id = message.from_user.id
     now = asyncio.get_event_loop().time()
 
-    # Проверка на спам (cooldown 60 секунд)
+    # Проверка на спам (кулдаун 60 секунд)
     if user_id in user_last_search and now - user_last_search[user_id] < SEARCH_COOLDOWN:
         remaining = int(SEARCH_COOLDOWN - (now - user_last_search[user_id]))
         await message.answer(f"⏳ Пожалуйста, подождите {remaining} сек. между поисками.")
@@ -57,7 +61,7 @@ async def process_fns_input(message: types.Message, state: FSMContext):
     fio = message.text.strip().title()
     fio_parts = fio.split()
 
-    # Удаляем сообщение-запрос (которое просило ввести ФИО)
+    # Удаление сообщения-запроса (которое просило ввести ФИО)
     data = await state.get_data()
     fio_msg_id = data.get('fio_request_msg_id')
     chat_id = data.get('chat_id')
@@ -67,13 +71,13 @@ async def process_fns_input(message: types.Message, state: FSMContext):
         except Exception as e:
             logging.error(f"Не удалось удалить сообщение с запросом ФИО: {e}")
 
-    # Удаляем само сообщение пользователя с введённым ФИО
+    # Удаление самого сообщения пользователя с введённым ФИО
     try:
         await message.delete()
     except Exception:
         pass
 
-    # Получаем ID пользователя из БД
+    # ID пользователя из БД
     user_db_id = get_or_create_user(
         telegram_id=message.from_user.id,
         username=message.from_user.username,
@@ -89,14 +93,14 @@ async def process_fns_input(message: types.Message, state: FSMContext):
         cache_date = get_cache_date('fio', fio, 'fns')
         days_ago = (datetime.now() - datetime.strptime(cache_date, '%Y-%m-%d')).days
 
-        # 🆕 Сохраняем данные запроса во временный словарь
+        # Сохраняем данные запроса во временный словарь
         pending_cache_queries[user_id] = {
             "search_type": "fio",
             "search_value": fio,
             "source": "fns"
         }
 
-        # 🆕 Короткие callback_data с user_id (всё в ASCII, влезает в 64 байта)
+        # Короткие callback_data с user_id
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
@@ -126,7 +130,7 @@ async def process_fns_input(message: types.Message, state: FSMContext):
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
-        return  # ВАЖНО: выходим, дальше обработают callback'и в cache_handlers.py
+        return  # ВАЖНО: выходим, дальше обработают callbackи в cache_handlers.py
 
     # ============================================================
     # КЭША НЕТ — запускаем полноценный поиск
@@ -185,9 +189,16 @@ async def process_fns_input(message: types.Message, state: FSMContext):
         )
         return
 
-    # Успешный поиск: сохраняем в БД и в КЭШ
+    # Успешный поиск - сохраняем в БД и в КЭШ
     update_request_success(request_id, result['results'], execution_time_ms)
     save_to_cache('fio', fio, 'fns', result['results'])
+
+    # Сохранение результатов для AI-анализа
+    ai_analysis_data[user_id] = {
+        "search_type": "fio",
+        "search_value": fio,
+        "results": result['results']
+    }
 
     # ==========================================
     # Формирование и отправка Excel (только для нового поиска)
@@ -223,10 +234,62 @@ async def process_fns_input(message: types.Message, state: FSMContext):
     caption_text = "\n".join(caption_lines)
 
     await bot.send_chat_action(chat_id=message.chat.id, action="upload_document")
-    await message.answer_document(document=FSInputFile(filepath), caption=caption_text, parse_mode="Markdown")
+    await message.answer_document(
+        document=FSInputFile(filepath),
+        caption=caption_text,
+        parse_mode="Markdown",
+        # Кнопка AI-анализа под Excel-файлом
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🤖 AI-анализ результатов", callback_data="ai_analyze_fio")]
+        ])
+    )
     await message.answer("🔍 Выберите тип поиска из меню ниже:", reply_markup=get_main_keyboard())
 
     try:
         os.remove(filepath)
     except Exception as e:
         logging.error(f"Не удалось удалить файл: {e}")
+
+# ==========================================
+# AI-АНАЛИЗ РЕЗУЛЬТАТОВ ПОИСКА
+# ==========================================
+@router.callback_query(F.data == "ai_analyze_fio")
+async def handle_ai_analyze_fio(callback: types.CallbackQuery):
+    """Обработчик кнопки AI-анализа для поиска по ФИО."""
+    await callback.answer("🤖 Запускаю AI-анализ...")
+
+    user_id = callback.from_user.id
+    data = ai_analysis_data.get(user_id)
+
+    if not data:
+        await callback.message.answer(
+            "⚠️ Нет данных для анализа. Выполните поиск заново.",
+            reply_markup=get_main_keyboard()
+        )
+        return
+
+    loading_msg = await callback.message.answer(
+        "⏳ Нейросеть анализирует данные...\nЭто может занять до минуты."
+    )
+
+    # Вызываем нейросеть
+    analysis = await analyze_search_results(
+        data["search_type"],
+        data["search_value"],
+        data["results"]
+    )
+
+    response_text = (
+        f"🤖 AI-анализ по запросу: {data['search_value']}\n\n"
+        f"{analysis}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"💡 Анализ выполнен с помощью DeepSeek AI"
+    )
+
+    # Защита от превышения лимита Telegram (4096 символов)
+    if len(response_text) > 4096:
+        response_text = response_text[:4090] + "…"
+
+    # Отправляем без parse_mode — текст от нейросети может содержать
+    # символы *, _, [, которые сломают Markdown-разметку
+    await loading_msg.edit_text(response_text)

@@ -52,7 +52,7 @@ async def process_phone_input(message: types.Message, state: FSMContext):
         await message.answer("❌ Неверный формат номера. Пожалуйста, введите корректный российский номер (11 цифр).")
         return
 
-    # Удаляем сообщение-запрос
+    # Удаление сообщения-запроса
     data = await state.get_data()
     phone_msg_id = data.get('phone_request_msg_id')
     chat_id = data.get('chat_id')
@@ -62,13 +62,13 @@ async def process_phone_input(message: types.Message, state: FSMContext):
         except Exception as e:
             logging.error(f"Не удалось удалить сообщение с запросом телефона: {e}")
 
-    # Удаляем сообщение пользователя с введённым номером
+    # Удаление сообщения пользователя с введённым номером
     try:
         await message.delete()
     except Exception:
         pass
 
-    # Получаем ID пользователя из БД
+    # ID пользователя из БД
     user_db_id = get_or_create_user(
         telegram_id=message.from_user.id,
         username=message.from_user.username,

@@ -15,7 +15,8 @@ async def process_search_choice(callback: types.CallbackQuery, state: FSMContext
     await state.clear()
     await callback.answer()
 
-    # 🆕 Удаляем предыдущее сообщение
+    # Удаление лишнего предыдыдущего сообщение (чтобы не засорять чат).
+    # Далее этот блок будет повторяться несколько раз
     try:
         await callback.message.delete()
     except Exception:
@@ -49,7 +50,6 @@ async def back_to_phone_source(callback: types.CallbackQuery, state: FSMContext)
     await state.set_state(SearchStates.waiting_for_phone_source)
     await callback.answer()
 
-    # 🆕 Удаляем предыдущее сообщение
     try:
         await callback.message.delete()
     except Exception:
@@ -62,14 +62,12 @@ async def back_to_phone_source(callback: types.CallbackQuery, state: FSMContext)
         parse_mode="Markdown"
     )
 
-
 @router.callback_query(F.data == "phone_source_listorg", SearchStates.waiting_for_phone_source)
 async def process_phone_source_listorg(callback: types.CallbackQuery, state: FSMContext):
     """Обработчик выбора list-org.com для поиска по телефону."""
     await callback.answer()
     await state.set_state(SearchStates.waiting_for_phone)
 
-    # 🆕 Удаляем предыдущее сообщение
     try:
         await callback.message.delete()
     except Exception:
@@ -85,13 +83,11 @@ async def process_phone_source_listorg(callback: types.CallbackQuery, state: FSM
 
     await state.update_data(phone_request_msg_id=msg.message_id, chat_id=msg.chat.id)
 
-
 @router.callback_query(F.data == "source_fns", SearchStates.waiting_for_source)
 async def process_source_choice_fns(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     await state.set_state(SearchStates.waiting_for_fns)
 
-    # 🆕 Удаляем предыдущее сообщение
     try:
         await callback.message.delete()
     except Exception:
@@ -116,7 +112,6 @@ async def back_to_search(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.answer()
 
-    # 🆕 Удаляем предыдущее сообщение
     try:
         await callback.message.delete()
     except Exception:
@@ -127,13 +122,11 @@ async def back_to_search(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=get_main_keyboard()
     )
 
-
 @router.callback_query(F.data == "back_to_source")
 async def back_to_source(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(SearchStates.waiting_for_source)
     await callback.answer()
 
-    # 🆕 Удаляем предыдущее сообщение
     try:
         await callback.message.delete()
     except Exception:
@@ -145,13 +138,11 @@ async def back_to_source(callback: types.CallbackQuery, state: FSMContext):
         parse_mode="Markdown"
     )
 
-
 @router.callback_query(F.data == "back_to_menu")
 async def back_to_menu(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.answer()
 
-    # 🆕 Удаляем предыдущее сообщение
     try:
         await callback.message.delete()
     except Exception:
@@ -162,7 +153,6 @@ async def back_to_menu(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=get_main_keyboard()
     )
 
-
 @router.callback_query(F.data == "cancel_search", SearchStates.searching)
 async def cancel_search(callback: types.CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
@@ -171,7 +161,6 @@ async def cancel_search(callback: types.CallbackQuery, state: FSMContext):
         cancel_event.set()
         logging.info(f"Пользователь {user_id} отменил поиск")
 
-    # 🆕 Удаляем предыдущее сообщение
     try:
         await callback.message.delete()
     except Exception:

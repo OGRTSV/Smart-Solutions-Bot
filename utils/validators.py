@@ -45,14 +45,14 @@ def validate_github_username(username: str) -> str | None:
     if not username:
         return None
 
-    # Очищаем от @ в начале и пробелов
+    # Очистка от @ в начале и пробелов
     cleaned = username.strip().lstrip("@").lower()
 
-    # Проверяем длину
+    # Проверка длины
     if len(cleaned) < 1 or len(cleaned) > 39:
         return None
 
-    # Проверяем на допустимые символы (только латиница, цифры, дефис)
+    # Проверка на допустимые символы (только латиница, цифры, дефис)
     if not re.match(r'^[a-z0-9-]+$', cleaned):
         return None
 

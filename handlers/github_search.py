@@ -44,7 +44,7 @@ router = Router()
 
 
 # ============================================================
-# 🐙 ОТКРЫТИЕ МЕНЮ GITHUB
+# ОТКРЫТИЕ МЕНЮ GITHUB
 # ============================================================
 @router.callback_query(F.data == "open_github_menu")
 async def open_github_menu(callback: types.CallbackQuery, state: FSMContext):
@@ -66,7 +66,7 @@ async def open_github_menu(callback: types.CallbackQuery, state: FSMContext):
 
 
 # ============================================================
-# 🔍 ПОИСК ПО НИКУ GITHUB
+# ПОИСК ПО НИКУ GITHUB
 # ============================================================
 @router.callback_query(F.data == "github_search_username")
 async def start_github_search(callback: types.CallbackQuery, state: FSMContext):
@@ -108,27 +108,27 @@ async def process_github_username(message: types.Message, state: FSMContext):
         )
         return
 
-    # Сбрасываем состояние ДО запроса, чтобы не было зависаний
+    # Сброс состояние ДО запроса (чтобы без зависаний)
     await state.clear()
 
-    # Показываем индикатор загрузки
+    # Индикатор загрузки
     loading_msg = await message.answer("⏳ Загружаю данные с GitHub...")
 
-    # Получаем ID пользователя из БД
+    # ID пользователя из БД
     user_db_id = get_or_create_user(
         telegram_id=message.from_user.id,
         username=message.from_user.username,
         first_name=message.from_user.first_name
     )
 
-    # Создаём запись в БД
+    # Создание записи в БД
     request_id = create_request(user_db_id, 'github', valid_username, 'github_api')
 
     try:
-        # Делаем запрос к GitHub API
+        # Запрос к GitHub API
         result = await search_github(valid_username)
 
-        # Удаляем сообщение загрузки
+        # Удаление лишнего сообщение с загрузкой
         try:
             await loading_msg.delete()
         except Exception:
@@ -152,7 +152,7 @@ async def process_github_username(message: types.Message, state: FSMContext):
         }
         update_request_success(request_id, [combined_results], 0)
 
-        # Форматируем и отправляем профиль
+        # Форматирование и отправка в профиль
         profile_text = format_github_profile(result["user"], result["repos_stats"])
 
         await message.answer(
@@ -176,7 +176,7 @@ async def process_github_username(message: types.Message, state: FSMContext):
 
 
 # ============================================================
-# 📁 ПОКАЗ РЕПОЗИТОРИЕВ (inline-кнопка)
+# ПОКАЗ РЕПОЗИТОРИЕВ (inline. Кнопка под сообщением с результатом поиска по нику гитхаба)
 # ============================================================
 @router.callback_query(F.data.startswith("github_repos:"))
 async def show_github_repos(callback: types.CallbackQuery):
@@ -190,7 +190,7 @@ async def show_github_repos(callback: types.CallbackQuery):
     except Exception:
         pass
 
-    # Получаем репозитории из API (не из БД!)
+    # Репозитории из API (они не из !!БД!!)
     repos = await get_repos(username)
     repos_stats = analyze_repos(repos)
 
@@ -217,7 +217,7 @@ async def show_github_repos(callback: types.CallbackQuery):
 
 
 # ============================================================
-# 📈 ПОКАЗ АКТИВНОСТИ (inline-кнопка)
+# ПОКАЗ АКТИВНОСТИ (inline. Кнопка под сообщением с результатом поиска по нику гитхаба)
 # ============================================================
 @router.callback_query(F.data.startswith("github_activity:"))
 async def show_github_activity(callback: types.CallbackQuery):
@@ -253,7 +253,7 @@ async def show_github_activity(callback: types.CallbackQuery):
 
 
 # ============================================================
-# ◀️ ВОЗВРАТ К ПРОФИЛЮ
+# ВОЗВРАТ К ПРОФИЛЮ
 # ============================================================
 @router.callback_query(F.data.startswith("github_back_profile:"))
 async def back_to_github_profile(callback: types.CallbackQuery):
@@ -293,7 +293,7 @@ async def back_to_github_profile(callback: types.CallbackQuery):
 
 
 # ============================================================
-# ⚔️ СРАВНЕНИЕ ДВУХ ПОЛЬЗОВАТЕЛЕЙ
+# СРАВНЕНИЕ ДВУХ ПОЛЬЗОВАТЕЛЕЙ
 # ============================================================
 @router.callback_query(F.data == "github_compare_start")
 async def start_github_compare(callback: types.CallbackQuery, state: FSMContext):
@@ -314,7 +314,6 @@ async def start_github_compare(callback: types.CallbackQuery, state: FSMContext)
         reply_markup = get_cancel_keyboard_github()
     )
 
-
 @router.message(SearchStates.waiting_github_compare_1, lambda message: message.text and not message.text.startswith('/'))
 async def process_github_compare_1(message: types.Message, state: FSMContext):
     """Обрабатывает первый никнейм и запрашивает второй."""
@@ -332,7 +331,7 @@ async def process_github_compare_1(message: types.Message, state: FSMContext):
         )
         return
 
-    # Сохраняем первый никнейм в состоянии
+    # Запоминание первого никнейма
     await state.update_data(user1=valid_username)
     await state.set_state(SearchStates.waiting_github_compare_2)
 
@@ -360,14 +359,14 @@ async def process_github_compare_2(message: types.Message, state: FSMContext):
         )
         return
 
-    # Получаем первый никнейм из состояния
+    # Берем первый никнейм
     data = await state.get_data()
     valid_username1 = data.get("user1")
 
-    # Сбрасываем состояние
+    # Сброс состояния
     await state.clear()
 
-    # Показываем индикатор загрузки
+    # Индикатор загрузки
     loading_msg = await message.answer(
         f"⏳ Загружаю данные обоих пользователей...\n\n"
         f"• `{valid_username1}`\n"
@@ -375,14 +374,14 @@ async def process_github_compare_2(message: types.Message, state: FSMContext):
         parse_mode="Markdown"
     )
 
-    # Получаем ID пользователя из БД
+    # ID пользователя из БД
     user_db_id = get_or_create_user(
         telegram_id=message.from_user.id,
         username=message.from_user.username,
         first_name=message.from_user.first_name
     )
 
-    # Создаём запись в БД (сохраняем оба никнейма через запятую)
+    # Создание записи в БД (Оба никнейма сохраняются через запятую)
     compare_value = f"{valid_username1} vs {valid_username2}"
     request_id = create_request(user_db_id, 'github_compare', compare_value, 'github_api')
 
@@ -391,13 +390,13 @@ async def process_github_compare_2(message: types.Message, state: FSMContext):
         user1_data = await search_github(valid_username1)
         user2_data = await search_github(valid_username2)
 
-        # Удаляем сообщение загрузки
+        # Удаление лишнего сообщения загрузки
         try:
             await loading_msg.delete()
         except Exception:
             pass
 
-        # Проверяем, найдены ли оба пользователя
+        # Проверка о нахождении обоих пользователей
         if not user1_data["found"]:
             update_request_error(request_id, 'not_found', f"Пользователь {valid_username1} не найден")
             await message.answer(
@@ -425,7 +424,7 @@ async def process_github_compare_2(message: types.Message, state: FSMContext):
         }
         update_request_success(request_id, [combined_results], 0)
 
-        # Форматируем и отправляем сравнение
+        # Форматирование и отправка получившегося сравнения
         compare_text = format_github_compare(
             user1_data["user"],
             user1_data["repos_stats"],

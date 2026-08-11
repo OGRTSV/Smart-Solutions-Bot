@@ -75,7 +75,7 @@ async def show_history(user_id: int, message: types.Message, offset: int = 0):
         status = req['status']
         created_at_raw = req['created_at']
 
-        # Парсим дату и время
+        # Парсинг даты и времени
         try:
             created_dt = datetime.fromisoformat(created_at_raw)
             created_formatted = created_dt.strftime("%Y-%m-%d | %H.%M.%S")
@@ -157,7 +157,6 @@ async def show_history(user_id: int, message: types.Message, offset: int = 0):
         parse_mode="Markdown"
     )
 
-
 @router.callback_query(F.data.startswith("history_page_"))
 async def handle_history_pagination(callback: types.CallbackQuery, state: FSMContext):
     """Обработчик пагинации истории запросов."""
@@ -189,7 +188,7 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
     results = request_data['results']
     status = request_data['status']  # Получаем статус
 
-    # Парсим дату исходного запроса
+    # Парсинг даты исходного запроса
     try:
         created_dt = datetime.fromisoformat(request_data['created_at'])
         created_formatted = created_dt.strftime("%Y-%m-%d | %H.%M.%S")
@@ -233,9 +232,9 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
         )
         return
 
-    # ==========================================
-    # 🐙 GITHUB: выводим профиль с inline-кнопками
-    # ==========================================
+    # ============================================================================================
+    # GITHUB: выводим профиль с inline-кнопками (которые после вывода профиля по нику дают возможность сделать некоторые дополнительные действия)
+    # ============================================================================================
     if search_type == 'github':
         data = results[0] if isinstance(results, list) else results
         user = data.get("user")
@@ -257,7 +256,7 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
         )
 
     # ==========================================
-    # ⚔️ GITHUB COMPARE: выводим сравнение
+    # GITHUB COMPARE - выводим сравнение двух пользователей
     # ==========================================
     elif search_type == 'github_compare':
         data = results[0] if isinstance(results, list) else results
@@ -280,7 +279,7 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
         )
 
     # ==========================================
-    # 👤 ФИО: генерируем Excel-файл
+    # ФИО: генерируем Excel-файл
     # ==========================================
     elif search_type == 'fio':
         filepath = create_excel_file_fns(search_value, results)
@@ -304,7 +303,7 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
             logger.error(f"Не удалось удалить файл: {e}")
 
     # ==========================================
-    # 📱 ТЕЛЕФОН: генерируем Excel-файл
+    # ТЕЛЕФОН: генерируем Excel-файл
     # ==========================================
     elif search_type == 'phone':
         filepath = create_excel_file_phone(search_value, results)
@@ -403,7 +402,7 @@ async def handle_history_export_all(callback: types.CallbackQuery, state: FSMCon
         else:
             status_text = status_map.get(req['status'], req['status'])
 
-        # Парсим дату и время
+        # Парсинг даты и времени
         try:
             created_dt = datetime.fromisoformat(req['created_at'])
             created_formatted = created_dt.strftime("%Y-%m-%d | %H.%M.%S")

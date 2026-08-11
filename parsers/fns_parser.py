@@ -20,6 +20,7 @@ async def search_fns(fio: str, cancel_event: asyncio.Event = None) -> dict:
     results = []
     seen_links = set()
     MAX_PAGES = 5
+
     # Переменные для отслеживания точек остановки
     ip_stopped_at_page = None
     boss_stopped_at_page = None
@@ -49,7 +50,7 @@ async def search_fns(fio: str, cancel_event: asyncio.Event = None) -> dict:
 
         try:
             # ==========================================
-            # ЭТАП 1: ПАРСИМ ИП (type=fio)
+            # 1. ПАРСИНГ ИП (По типу ФИО - type=fio)
             # ==========================================
             logging.info(f"Этап 1: Поиск ИП (type=fio)")
             for page in range(1, MAX_PAGES + 1):
@@ -110,11 +111,12 @@ async def search_fns(fio: str, cancel_event: asyncio.Event = None) -> dict:
                         logging.warning(f"Ошибка парсинга ИП: {e}")
                         continue
                 logging.info(f"На странице ИП {page} добавлено: {ip_found_on_page}")
+
                 # Если нашли что-то на этой странице и это была последняя в лимите
                 if ip_found_on_page > 0 and page == MAX_PAGES:
                     ip_stopped_at_page = page + 1
 
-            # --- ПРОВЕРКА СУЩЕСТВОВАНИЯ СЛЕДУЮЩЕЙ СТРАНИЦЫ ИП ---
+            # ПРОВЕРКА СУЩЕСТВОВАНИЯ СЛЕДУЮЩЕЙ СТРАНИЦЫ ИП
             if ip_stopped_at_page == MAX_PAGES + 1:
                 next_url = f"https://www.list-org.com/search?type=fio&val={requests.utils.quote(fio)}&page={MAX_PAGES + 1}"
                 try:
@@ -139,7 +141,7 @@ async def search_fns(fio: str, cancel_event: asyncio.Event = None) -> dict:
                     ip_stopped_at_page = None
 
             # ==========================================
-            # ЭТАП 2: ПАРСИМ КОМПАНИИ (type=boss)
+            # 2. ПАРСИИНГ КОМПАНИй (По типу руководителя - type=boss)
             # ==========================================
             logging.info(f"Этап 2: Поиск Компаний (type=boss)")
             for page in range(1, MAX_PAGES + 1):
@@ -190,7 +192,8 @@ async def search_fns(fio: str, cancel_event: asyncio.Event = None) -> dict:
                             block = link_elem.parent.parent if link_elem.parent else link_elem
                         full_text = block.get_text(separator=' ', strip=True)
                         text_lower = full_text.lower()
-                        # УЛУЧШЕННОЕ ОПРЕДЕЛЕНИЕ ТИПА ОРГАНИЗАЦИИ
+
+                        # УЛУЧШЕННОЕ ОПРЕДЕЛЕНИЕ ТИПА ОРГАНИЗАЦИИ. Перечисление всех типов компаний (лучше не придумал)
                         org_type = 'Не определено'
                         if 'ПАО' in name:
                             org_type = 'ПАО'
@@ -263,11 +266,12 @@ async def search_fns(fio: str, cancel_event: asyncio.Event = None) -> dict:
                         logging.warning(f"Ошибка парсинга компании: {e}")
                         continue
                 logging.info(f"На странице Компаний {page} добавлено: {comp_found_on_page}")
+
                 # Если нашли что-то на этой странице и это была последняя в лимите
                 if comp_found_on_page > 0 and page == MAX_PAGES:
                     boss_stopped_at_page = page + 1
 
-            # --- ПРОВЕРКА СУЩЕСТВОВАНИЯ СЛЕДУЮЩЕЙ СТРАНИЦЫ КОМПАНИЙ ---
+            # ПРОВЕРКА СУЩЕСТВОВАНИЯ СЛЕДУЮЩЕЙ СТРАНИЦЫ КОМПАНИЙ
             if boss_stopped_at_page == MAX_PAGES + 1:
                 next_url = f"https://www.list-org.com/search?val={requests.utils.quote(fio)}&type=boss&sort=&page={MAX_PAGES + 1}"
                 try:
@@ -294,7 +298,7 @@ async def search_fns(fio: str, cancel_event: asyncio.Event = None) -> dict:
         finally:
             await loop.run_in_executor(None, lambda: driver.quit())
 
-        # Формируем ссылки на продолжение поиска
+        # Формирование ссылок на продолжение поиска
         ip_next_url = None
         boss_next_url = None
         if ip_stopped_at_page:

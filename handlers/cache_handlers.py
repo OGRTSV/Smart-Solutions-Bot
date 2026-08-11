@@ -1,4 +1,3 @@
-# handlers/cache_handlers.py
 import asyncio
 import os
 import time
@@ -37,7 +36,7 @@ async def handle_cache_choice(callback: types.CallbackQuery, state: FSMContext):
 
     user_id = callback.from_user.id
 
-    # 🆕 Получаем данные из временного словаря
+    # Получение данных из временного словаря
     query_data = pending_cache_queries.get(user_id)
 
     if not query_data:
@@ -51,10 +50,9 @@ async def handle_cache_choice(callback: types.CallbackQuery, state: FSMContext):
     source = query_data["source"]
     action = "quick" if "quick" in callback.data else "new"
 
-    # Удаляем данные из словаря (они больше не нужны)
+    # Удаление данные из словаря (они больше не нужны)
     pending_cache_queries.pop(user_id, None)
 
-    # Удаляем сообщение с кнопками
     try:
         await callback.message.delete()
     except:
@@ -72,7 +70,7 @@ async def handle_cache_choice(callback: types.CallbackQuery, state: FSMContext):
 
         cache_date = get_cache_date(search_type, search_value, source)
 
-        # Сохраняем в историю
+        # Сохранение в истории
         user_db_id = get_or_create_user(
             telegram_id=callback.from_user.id,
             username=callback.from_user.username,
@@ -89,7 +87,7 @@ async def handle_cache_choice(callback: types.CallbackQuery, state: FSMContext):
             )
 
             await callback.message.answer(
-                f"📊 *ЕГРЮЛ/ЕГРИП:* Найдено записей: *{len(cached_results)}* (⚡ из кэша). Формирую Excel-файл...",
+                f"📊 *ЕГРЮЛ/ЕГРИП:* Найдено записей: *{len(cached_results)}* (из кэша). Формирую Excel-файл...",
                 parse_mode="Markdown"
             )
 
@@ -117,7 +115,7 @@ async def handle_cache_choice(callback: types.CallbackQuery, state: FSMContext):
             )
 
             await callback.message.answer(
-                f"📊 *Найдено организаций: {len(cached_results)}* (⚡ из кэша). Формирую Excel-файл...",
+                f"📊 *Найдено организаций: {len(cached_results)}* (из кэша). Формирую Excel-файл...",
                 parse_mode="Markdown"
             )
 
@@ -137,7 +135,7 @@ async def handle_cache_choice(callback: types.CallbackQuery, state: FSMContext):
                 parse_mode="Markdown"
             )
 
-        # Удаляем временный файл
+        # Удаление временного файа
         try:
             os.remove(filepath)
         except Exception as e:
@@ -202,7 +200,7 @@ async def handle_cache_choice(callback: types.CallbackQuery, state: FSMContext):
                 )
                 return
 
-            # Обновляем кэш
+            # Обновление кэша
             update_request_success(request_id, result['results'], execution_time_ms)
             save_to_cache('fio', search_value, 'fns', result['results'])
 
@@ -286,7 +284,7 @@ async def handle_cache_choice(callback: types.CallbackQuery, state: FSMContext):
                 )
                 return
 
-            # Обновляем кэш
+            # Обновление кэша
             update_request_success(request_id, result['results'], execution_time_ms)
             save_to_cache('phone', search_value, 'listorg', result['results'])
 
@@ -314,7 +312,7 @@ async def handle_cache_choice(callback: types.CallbackQuery, state: FSMContext):
                 parse_mode="Markdown"
             )
 
-        # Удаляем временный файл
+        # Удаление временного файла
         try:
             os.remove(filepath)
         except Exception as e:

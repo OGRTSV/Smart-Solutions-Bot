@@ -16,9 +16,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 dp = Dispatcher()
 
-# Подключаем все роутеры (обработчики)
+# Подключение всех роутеров (обработчики)
 dp.include_routers(
-    github_router,   # GitHub — первым (там тоже состояния)
+    github_router,   # GitHub — первым
     history_router,         # История — раньше start
     fio_search.router,      # ФИО — ДО start
     phone_search.router,    # Телефон — ДО start
@@ -35,7 +35,7 @@ async def shutdown():
 async def main():
     logging.info("Запуск бота...")
 
-    # Создаем таблицы в БД, если их нет
+    # Создание таблицы в БД (если нет)
     init_database()
 
     loop = asyncio.get_event_loop()

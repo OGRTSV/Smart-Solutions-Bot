@@ -116,13 +116,13 @@ def get_or_create_user(telegram_id: int, username: str = None, first_name: str =
 
         if result:
             user_id = result[0]
-            # Обновляем username и first_name, если они изменились
+            # Обновление username и first_name, если они изменились
             cursor.execute("""
                 UPDATE users SET username = ?, first_name = ?
                 WHERE id = ?
             """, (username, first_name, user_id))
         else:
-            # Создаём нового пользователя
+            # Создание нового пользователя
             cursor.execute("""
                 INSERT INTO users (telegram_id, username, first_name)
                 VALUES (?, ?, ?)
@@ -156,7 +156,7 @@ def create_request(user_id: int, search_type: str, search_value: str, source: st
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
-        # 🆕 Используем локальное время Python
+        # Используем локальное время Python
         current_time = datetime.now().isoformat()
 
         cursor.execute("""
@@ -190,7 +190,7 @@ def update_request_success(request_id: int, results: List[Dict], execution_time_
         cursor = conn.cursor()
 
         results_json = json.dumps(results, ensure_ascii=False)
-        # 🆕 Используем локальное время Python
+        # Используем локальное время Python
         completed_time = datetime.now().isoformat()
 
         cursor.execute("""
@@ -225,7 +225,7 @@ def update_request_error(request_id: int, error_type: str, error_message: str):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
-        # Маппим тип ошибки в корректный статус
+        # Маппинг типа ошибки в корректный статус
         # Отмена и специфичные типы сохраняются как есть,
         # всё остальное становится обычной ошибкой 'error'
         status_mapping = {
@@ -408,16 +408,16 @@ def save_to_cache(search_type: str, search_value: str, source: str, results: Lis
 
         results_json = json.dumps(results, ensure_ascii=False)
         expires_at = (datetime.now() + timedelta(days=cache_days)).isoformat()
-        # 🆕 Используем локальное время Python
+        # Используем локальное время Python
         created_at = datetime.now().isoformat()
 
-        # Удаляем старую запись
+        # Удаление старой записи
         cursor.execute("""
                 DELETE FROM cache 
                 WHERE search_type = ? AND search_value = ? AND source = ?
             """, (search_type, search_value, source))
 
-        # Вставляем новую с локальным временем
+        # Вставка новой с локальным временем
         cursor.execute("""
                 INSERT INTO cache 
                 (search_type, search_value, source, results_json, expires_at, created_at)
@@ -461,7 +461,7 @@ def check_user_limit(telegram_id: int) -> tuple[bool, int]:
         limit, today_count, last_date = row
         today = datetime.now().date().isoformat()
 
-        # Если день изменился, сбрасываем счётчик
+        # Если день изменился - сброс счётчика
         if last_date != today:
             cursor.execute("""
                 UPDATE users SET requests_today = 0, last_request_date = ?
@@ -531,7 +531,7 @@ def get_cache_date(search_type: str, search_value: str, source: str) -> Optional
         if not row:
             return None
 
-        # Извлекаем только дату (YYYY-MM-DD)
+        # Извлекаем только дату (ГГГГ-ММ-ДД)
         return row[0][:10]
 
     except Exception as e:
