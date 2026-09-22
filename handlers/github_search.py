@@ -103,6 +103,7 @@ async def process_github_username(message: types.Message, state: FSMContext):
             "Никнейм GitHub должен:\n"
             "• Содержать только латинские буквы, цифры и дефисы\n"
             "• Быть длиной от 1 до 39 символов\n"
+            "• Ник не может состоять только из цифр.\n"
             "• Не начинаться и не заканчиваться дефисом\n"
             "• Не содержать два дефиса подряд",
         )
@@ -324,9 +325,13 @@ async def process_github_compare_1(message: types.Message, state: FSMContext):
 
     if not valid_username:
         await message.answer(
-            "❌ Неверный формат никнейма. Попробуйте ещё раз:\n"
-            "_Например: `torvalds`_\n\n"
-            "💡 Для отмены введите /start",
+            "❌ Неверный формат никнейма.\n\n"
+            "Никнейм GitHub должен:\n"
+            "• Содержать только латинские буквы, цифры и дефисы\n"
+            "• Быть длиной от 1 до 39 символов\n"
+            "• Ник не может состоять только из цифр.\n"
+            "• Не начинаться и не заканчиваться дефисом\n"
+            "• Не содержать два дефиса подряд",
             parse_mode="Markdown"
         )
         return
@@ -341,7 +346,6 @@ async def process_github_compare_1(message: types.Message, state: FSMContext):
         parse_mode="Markdown"
     )
 
-
 @router.message(SearchStates.waiting_github_compare_2, lambda message: message.text and not message.text.startswith('/'))
 async def process_github_compare_2(message: types.Message, state: FSMContext):
     """Обрабатывает второй никнейм, делает сравнение и выводит результат."""
@@ -352,9 +356,13 @@ async def process_github_compare_2(message: types.Message, state: FSMContext):
 
     if not valid_username2:
         await message.answer(
-            "❌ Неверный формат никнейма. Попробуйте ещё раз:\n"
-            "_Например: `gvanrossum`_\n\n"
-            "💡 Для отмены введите /start",
+            "❌ Неверный формат никнейма.\n\n"
+            "Никнейм GitHub должен:\n"
+            "• Содержать только латинские буквы, цифры и дефисы\n"
+            "• Быть длиной от 1 до 39 символов\n"
+            "• Ник не может состоять только из цифр.\n"
+            "• Не начинаться и не заканчиваться дефисом\n"
+            "• Не содержать два дефиса подряд",
             parse_mode="Markdown"
         )
         return

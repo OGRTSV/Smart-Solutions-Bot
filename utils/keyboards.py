@@ -5,6 +5,7 @@ def get_main_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📱 Поиск по телефону", callback_data="search_phone")],
         [InlineKeyboardButton(text="👤 Поиск по ФИО", callback_data="search_fio")],
         [InlineKeyboardButton(text="🐙 Поиск по GitHub", callback_data="open_github_menu")],
+        [InlineKeyboardButton(text="🌐 Поиск по username", callback_data="search_username")],  # ← НОВАЯ КНОПКА
         [InlineKeyboardButton(text="🚗 Поиск по госномеру (временно не работает)", callback_data="search_plate")],
         [InlineKeyboardButton(text="📜 История запросов", callback_data="open_history")],
     ])

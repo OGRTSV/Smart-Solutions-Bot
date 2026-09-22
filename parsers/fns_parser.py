@@ -65,7 +65,7 @@ async def search_fns(fio: str, cancel_event: asyncio.Event = None) -> dict:
                     await loop.run_in_executor(None, lambda: driver.get(url))
                     await loop.run_in_executor(
                         None,
-                        lambda: WebDriverWait(driver, 30).until(
+                        lambda: WebDriverWait(driver, 10).until(
                             lambda d: d.find_elements(By.CSS_SELECTOR, "a[href*='/man/']") or
                                       "ничего не найдено" in d.page_source.lower() or
                                       "по вашему запросу ничего не найдено" in d.page_source.lower()
@@ -124,7 +124,7 @@ async def search_fns(fio: str, cancel_event: asyncio.Event = None) -> dict:
                     await loop.run_in_executor(None, lambda: driver.get(next_url))
                     await loop.run_in_executor(
                         None,
-                        lambda: WebDriverWait(driver, 15).until(
+                        lambda: WebDriverWait(driver, 5).until(
                             lambda d: d.find_elements(By.CSS_SELECTOR, "a[href*='/man/']") or
                                       "ничего не найдено" in d.page_source.lower() or
                                       "по вашему запросу ничего не найдено" in d.page_source.lower()
@@ -156,7 +156,7 @@ async def search_fns(fio: str, cancel_event: asyncio.Event = None) -> dict:
                     await loop.run_in_executor(None, lambda: driver.get(url))
                     await loop.run_in_executor(
                         None,
-                        lambda: WebDriverWait(driver, 30).until(
+                        lambda: WebDriverWait(driver, 10).until(
                             lambda d: d.find_elements(By.CSS_SELECTOR, "a[href*='/company/']") or
                                       "ничего не найдено" in d.page_source.lower() or
                                       "по вашему запросу ничего не найдено" in d.page_source.lower()
@@ -279,7 +279,7 @@ async def search_fns(fio: str, cancel_event: asyncio.Event = None) -> dict:
                     await loop.run_in_executor(None, lambda: driver.get(next_url))
                     await loop.run_in_executor(
                         None,
-                        lambda: WebDriverWait(driver, 15).until(
+                        lambda: WebDriverWait(driver, 5).until(
                             lambda d: d.find_elements(By.CSS_SELECTOR, "a[href*='/company/']") or
                                       "ничего не найдено" in d.page_source.lower() or
                                       "по вашему запросу ничего не найдено" in d.page_source.lower()

@@ -1,0 +1,31 @@
+{
+  "sites": [
+    {"name": "GitHub", "url": "https://github.com/{username}", "check": "status", "category": "Разработка"},
+    {"name": "GitLab", "url": "https://gitlab.com/{username}", "check": "status", "category": "Разработка"},
+    {"name": "Habr", "url": "https://habr.com/ru/users/{username}/", "check": "status", "category": "Разработка"},
+    {"name": "Telegram", "url": "https://t.me/{username}", "check": "marker", "exists_marker": "tgme_action_button", "category": "Мессенджеры"},
+    {"name": "VK", "url": "https://vk.com/{username}", "check": "marker", "absent_marker": "404 Not Found", "category": "Соцсети"},
+    {"name": "OK.ru", "url": "https://ok.ru/{username}", "check": "marker", "absent_marker": "Эта страница не существует", "category": "Соцсети"},
+    {"name": "Pikabu", "url": "https://pikabu.ru/@{username}", "check": "status", "category": "Соцсети"},
+    {"name": "Reddit", "url": "https://www.reddit.com/user/{username}/", "check": "marker", "absent_marker": "Sorry, nobody on Reddit goes by that name", "category": "Соцсети"},
+    {"name": "Tumblr", "url": "https://{username}.tumblr.com/", "check": "status", "category": "Блоги"},
+    {"name": "LiveJournal", "url": "https://{username}.livejournal.com/", "check": "marker", "absent_marker": "Journal not found", "category": "Блоги"},
+    {"name": "Blogger", "url": "https://{username}.blogspot.com/", "check": "status", "category": "Блоги"},
+    {"name": "WordPress", "url": "https://{username}.wordpress.com/", "check": "marker", "absent_marker": "Do you want to register", "category": "Блоги"},
+    {"name": "Medium", "url": "https://medium.com/@{username}", "check": "status", "category": "Блоги"},
+    {"name": "Дзен", "url": "https://dzen.ru/{username}", "check": "status", "category": "Блоги"},
+    {"name": "YouTube", "url": "https://www.youtube.com/@{username}", "check": "marker", "absent_marker": "This page isn't available", "category": "Видео"},
+    {"name": "Twitch", "url": "https://www.twitch.tv/{username}", "check": "marker", "absent_marker": "Sorry. Unless you've got a time machine", "category": "Видео"},
+    {"name": "Vimeo", "url": "https://vimeo.com/{username}", "check": "status", "category": "Видео"},
+    {"name": "SoundCloud", "url": "https://soundcloud.com/{username}", "check": "status", "category": "Музыка"},
+    {"name": "Last.fm", "url": "https://www.last.fm/user/{username}", "check": "status", "category": "Музыка"},
+    {"name": "Steam", "url": "https://steamcommunity.com/id/{username}", "check": "marker", "absent_marker": "The specified profile could not be found", "category": "Игры"},
+    {"name": "Gravatar", "url": "https://ru.gravatar.com/{username}", "check": "status", "category": "Профили"},
+    {"name": "About.me", "url": "https://about.me/{username}", "check": "status", "category": "Профили"},
+    {"name": "Disqus", "url": "https://disqus.com/by/{username}/", "check": "status", "category": "Профили"},
+    {"name": "Behance", "url": "https://www.behance.net/{username}", "check": "status", "category": "Творчество"},
+    {"name": "Dribbble", "url": "https://dribbble.com/{username}", "check": "marker", "absent_marker": "This page is missing", "category": "Творчество"},
+    {"name": "DeviantArt", "url": "https://www.deviantart.com/{username}", "check": "status", "category": "Творчество"},
+    {"name": "Flickr", "url": "https://www.flickr.com/people/{username}/", "check": "status", "category": "Творчество"}
+  ]
+}

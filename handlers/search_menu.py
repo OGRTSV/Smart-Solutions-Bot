@@ -1,6 +1,8 @@
 import logging
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from states import SearchStates
 from utils.keyboards import get_main_keyboard, get_source_keyboard, get_phone_source_keyboard, \
@@ -10,7 +12,7 @@ from core import cancel_events
 router = Router()
 
 
-@router.callback_query(F.data.in_(["search_phone", "search_fio", "search_plate"]))
+@router.callback_query(F.data.in_(["search_phone", "search_fio", "search_plate", "search_username"]))
 async def process_search_choice(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.answer()
@@ -43,6 +45,32 @@ async def process_search_choice(callback: types.CallbackQuery, state: FSMContext
         await state.set_state(SearchStates.waiting_for_plate)
         await callback.message.answer("🚗 Введите госномер автомобиля (например: А123ВС77 или А123ВС777):")
 
+
+    elif callback.data == "search_username":
+        await state.set_state(SearchStates.waiting_for_username)
+
+        msg = await callback.message.answer(
+            "🌐 *Поиск по username*\n\n"
+            "Введите username (никнейм), который хотите проверить.\n\n"
+            "Бот проверит его наличие на множестве платформ:\n"
+            "• GitHub, GitLab, Habr\n"
+            "• VK, OK, Reddit, Pikabu\n"
+            "• YouTube, Twitch, Vimeo\n"
+            "• Steam, SoundCloud и других\n\n"
+            "Формат: латиница, цифры, символы `.`, `_`, `-`\n"
+            "Примеры: `john_doe`, `user123`, `my.profile`\n\n"
+            "✏️ Введите username:",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🏠 В главное меню", callback_data="back_to_menu")]
+            ])
+        )
+
+        # Сохраняем ID сообщения для последующего удаления в handler'е
+        await state.update_data(
+            username_request_msg_id=msg.message_id,
+            chat_id=msg.chat.id
+        )
 
 @router.callback_query(F.data == "back_to_phone_source")
 async def back_to_phone_source(callback: types.CallbackQuery, state: FSMContext):

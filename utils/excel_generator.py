@@ -5,6 +5,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
+logger = logging.getLogger(__name__)
 
 def create_excel_file_fns(fio: str, results: list) -> str:
     """Создает Excel-файл с результатами поиска в ЕГРЮЛ/ЕГРИП."""
@@ -136,4 +137,70 @@ def create_excel_file_phone(phone: str, results: list) -> str:
     filepath = os.path.join(os.getcwd(), filename)
     wb.save(filepath)
     logging.info(f"Excel-файл сохранен: {filepath}")
+    return filepath
+
+
+def create_excel_file_username(username: str, results: list) -> str:
+    """
+    Создаёт Excel-файл с результатами поиска по username.
+
+    Args:
+        username: Искомый username
+        results: Список найденных профилей [{site, url, category}]
+
+    Returns:
+        Путь к созданному файлу
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Профили"
+
+    # Стили
+    header_font = Font(bold=True, size=12, color="FFFFFF")
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center")
+
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+
+    # Заголовки
+    headers = ["№", "Платформа", "Категория", "Ссылка на профиль"]
+    ws.append(headers)
+
+    for col_num, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = thin_border
+
+    # Данные
+    for idx, profile in enumerate(results, 1):
+        ws.append([
+            idx,
+            profile.get("site", ""),
+            profile.get("category", ""),
+            profile.get("url", "")
+        ])
+
+        # Границы для всех ячеек строки
+        for col_num in range(1, 5):
+            ws.cell(row=idx + 1, column=col_num).border = thin_border
+
+    # Ширина колонок
+    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 15
+    ws.column_dimensions['D'].width = 50
+
+    # Сохранение
+    filename = f"username_{username}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filepath = os.path.join(os.getcwd(), filename)
+    wb.save(filepath)
+
+    logger.info(f"✅ Excel-файл для username создан: {filepath}")
     return filepath

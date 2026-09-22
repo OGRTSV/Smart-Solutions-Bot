@@ -6,7 +6,7 @@ from aiogram import Dispatcher
 from aiogram.exceptions import TelegramServerError, TelegramNetworkError
 
 from core import bot
-from handlers import start, search_menu, fio_search, phone_search, plate_search
+from handlers import start, search_menu, fio_search, phone_search, plate_search, username_search
 from handlers.cache_handlers import router as cache_router
 from utils.database import init_database
 from handlers.history import router as history_router
@@ -23,6 +23,7 @@ dp.include_routers(
     fio_search.router,      # ФИО — ДО start
     phone_search.router,    # Телефон — ДО start
     plate_search.router,    # Госномер — ДО start
+    username_search.router, # Username — ДО start
     search_menu.router,     # Меню поиска
     cache_router,           # Обработчики кэша
     start.router,           # Start и F.text — ПОСЛЕДНИМ

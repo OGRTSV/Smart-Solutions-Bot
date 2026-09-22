@@ -12,6 +12,43 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
 
+# ==========================================
+# Извлечение данных о номере (регион + оператор)
+# ==========================================
+def _extract_phone_info(soup, html: str):
+    """
+    Извлекает со страницы list-org.com строку вида:
+    "Данные о номере: регион г. Казань|Республика Татарстан, оператор ПАО "Таттелеком""
+    Возвращает строку или None, если не найдена.
+    """
+    # Поиск через regex: "Данные о номере:" и всё до ближайшего HTML-тега
+    m = re.search(r'Данные о номере:[^<]+', html)
+    if m:
+        text = m.group(0).strip()
+
+        # Обрезаем всё, что идёт ПОСЛЕ данных о номере (без этого захватывало лишнее)
+        # На сайте дальше может быть: "Список организаций", "Найдено N", "Сравнить" и т.п.
+        for cut_marker in ['Список организаций', 'Найдено ', 'Сравнить', 'Скачать список']:
+            if cut_marker in text:
+                text = text[:text.index(cut_marker)].strip()
+
+        # Если строка получилась осмысленной длины — возвращаем
+        if 20 < len(text) < 300:
+            return text
+
+    # Запасной вариант: поиск через soup, но только сам текст (без родителя)
+    try:
+        info_tag = soup.find(string=re.compile(r'Данные о номере'))
+        if info_tag:
+            text = info_tag.strip()
+            if 20 < len(text) < 300:
+                return text
+    except Exception as e:
+        logging.warning(f"Не удалось извлечь данные о номере через soup: {e}")
+
+    return None
+
+
 async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> dict:
     """
     Поиск организаций по номеру телефона через list-org.com
@@ -71,6 +108,7 @@ async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> di
                 return {
                     "found": False,
                     "results": [],
+                    "phone_info": None,
                     "message": "Сайт list-org.com временно недоступен"
                 }
 
@@ -94,16 +132,22 @@ async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> di
                 return {
                     "found": False,
                     "results": [],
+                    "phone_info": None,
                     "message": "Сайт list-org.com вернул некорректный ответ"
                 }
 
             # Проверяем отмену пользователя ДО парсинга
             if cancel_event and cancel_event.is_set():
-                return {"found": False, "message": "Поиск отменен", "cancelled": True, "results": []}
+                return {"found": False, "message": "Поиск отменен", "cancelled": True, "results": [], "phone_info": None}  # 🆕
 
             html = await loop.run_in_executor(None, lambda: driver.page_source)
             soup = BeautifulSoup(html, 'lxml')
             page_text_lower = html.lower()
+
+            # Данные о номере (регион и оператор)
+            phone_info = _extract_phone_info(soup, html)
+            if phone_info:
+                logging.info(f"📡 {phone_info}")
 
             # Проверяем явные сообщения об отсутствии результата
             no_result_keywords = ['ничего не найдено', 'не найдено', 'нет данных',
@@ -113,6 +157,7 @@ async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> di
                 return {
                     "found": False,
                     "results": [],
+                    "phone_info": phone_info,
                     "message": "Организации с таким номером не найдены"
                 }
 
@@ -124,13 +169,14 @@ async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> di
                 return {
                     "found": False,
                     "results": [],
+                    "phone_info": phone_info,
                     "message": "Организации с таким номером не найдены"
                 }
 
             # Парсинг результатов (тот же блок, что и раньше)
             for link_elem in links:
                 if cancel_event and cancel_event.is_set():
-                    return {"found": False, "message": "Поиск отменен", "cancelled": True, "results": results}
+                    return {"found": False, "message": "Поиск отменен", "cancelled": True, "results": results, "phone_info": phone_info}  # 🆕
 
                 try:
                     href = link_elem.get('href', '')
@@ -211,10 +257,11 @@ async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> di
                 return {
                     "found": False,
                     "results": [],
+                    "phone_info": phone_info,
                     "message": "Организации с таким номером не найдены"
                 }
 
-            return {"found": True, "count": len(results), "results": results}
+            return {"found": True, "count": len(results), "results": results, "phone_info": phone_info}
 
         finally:
             # Гарантированно закрываем браузер
@@ -222,7 +269,7 @@ async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> di
                 await loop.run_in_executor(None, lambda: driver.quit())
 
     except Exception as e:
-        # Сюда попадаем ТОЛЬКО при критических сбоях (не при отсутствии результата!)
+        # Сюда - ТОЛЬКО при критических сбоях (не при отсутствии результата!)
         logging.error(f"Критическая ошибка при поиске по телефону {phone}: {e}", exc_info=True)
 
         # Закрываем браузер, если остался открытым
@@ -235,6 +282,7 @@ async def search_phone_org(phone: str, cancel_event: asyncio.Event = None) -> di
         return {
             "found": False,
             "results": [],
+            "phone_info": None,
             "message": "Внутренняя ошибка бота. Попробуйте повторить запрос позже.",
             "error": str(e)
         }

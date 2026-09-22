@@ -21,7 +21,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await message.answer("👋 Добро пожаловать в OSINT-бот компании «Умные решения»!")
     await message.answer(
         f"🔍 Выберите тип поиска из меню ниже.\n\n"
-        f"Вы можете посмотреть историю запросов, введя команду /history в любой момент.",
+        f"Вы можете в любой момент ввести команду /history для просмотра вашей истории запросов или команду /start для повторного вывода главного меню.",
         reply_markup=get_main_keyboard()
     )
 

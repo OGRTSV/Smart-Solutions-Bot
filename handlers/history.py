@@ -5,12 +5,13 @@ from aiogram import Router, F, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
-
 from utils.keyboards import get_main_keyboard, get_github_profile_actions
-from utils.excel_generator import create_excel_file_fns, create_excel_file_phone
+from utils.excel_generator import create_excel_file_fns, create_excel_file_phone, create_excel_file_username
 from utils.formatters import format_github_profile, format_github_compare
 from utils.database import get_user_history, get_request_results
 from core import bot
+# Импорт для ИИ-анализа
+from handlers.fio_search import ai_analysis_data
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -64,7 +65,6 @@ async def show_history(user_id: int, message: types.Message, offset: int = 0):
         "❌ — что-то пошло не так\n",
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     ]
-
     keyboard_buttons = []
 
     for req in history:
@@ -105,6 +105,9 @@ async def show_history(user_id: int, message: types.Message, offset: int = 0):
         elif search_type == 'github_compare':
             icon = "⚔️"
             type_name = "GitHub сравнение"
+        elif search_type == 'username':
+            icon = "🌐"
+            type_name = "Username"
         else:
             icon = "🔍"
             type_name = search_type
@@ -140,7 +143,6 @@ async def show_history(user_id: int, message: types.Message, offset: int = 0):
         pagination_buttons.append(
             InlineKeyboardButton(text="Вперёд ➡️", callback_data=f"history_page_{offset + limit}")
         )
-
     if pagination_buttons:
         keyboard_buttons.append(pagination_buttons)
 
@@ -157,17 +159,16 @@ async def show_history(user_id: int, message: types.Message, offset: int = 0):
         parse_mode="Markdown"
     )
 
+
 @router.callback_query(F.data.startswith("history_page_"))
 async def handle_history_pagination(callback: types.CallbackQuery, state: FSMContext):
     """Обработчик пагинации истории запросов."""
     await callback.answer()
     offset = int(callback.data.replace("history_page_", ""))
-
     try:
         await callback.message.delete()
     except:
         pass
-
     await show_history(callback.from_user.id, callback.message, offset=offset)
 
 
@@ -175,7 +176,6 @@ async def handle_history_pagination(callback: types.CallbackQuery, state: FSMCon
 async def handle_history_download(callback: types.CallbackQuery, state: FSMContext):
     """Обработчик скачивания результата из истории запросов."""
     await callback.answer("⏳ Загружаю данные...")
-
     request_id = int(callback.data.replace("history_download_", ""))
     request_data = get_request_results(request_id)
 
@@ -201,7 +201,7 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
             f"⛔ *Запрос был отменён*\n\n"
             f"🔹 Тип поиска: `{search_type}`\n"
             f"🔹 Значение: `{search_value}`\n"
-            f"📅 _Дата запроса: {created_formatted}_\n\n",
+            f"📅 _Дата запроса: {created_formatted}_\n",
             parse_mode="Markdown",
             reply_markup=get_main_keyboard()
         )
@@ -211,24 +211,51 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
     if not results or len(results) == 0:
         # Определяем эмодзи и текст в зависимости от статуса
         if status in ('not_found', 'completed'):
-            # Поиск прошёл успешно, но ничего не нашли
             status_icon = "📭"
             title = "Нет данных по запросу"
+            # Для пустых успешных запросов предлагаем спросить нейросеть
+            offer_ai_search = True
         elif status in ('error', 'parser_error'):
-            # Настоящая ошибка (сеть, API, сбой)
             status_icon = "❌"
             title = "Ошибка при запросе"
+            offer_ai_search = False
         else:
             status_icon = "❌"
             title = "Нет данных"
+            offer_ai_search = False
+
+        # Для поиска по телефону - новые данные о номере
+        phone_info = request_data.get("phone_info")
+        info_line = ""
+        if search_type == 'phone' and phone_info:
+            info_line = f"📡 {phone_info} _(первый оператор, текущий может отличаться)_\n"
+
+        # Формируем клавиатуру
+        if offer_ai_search:
+            # Сохраняем пустые результаты для AI-вопроса
+            ai_analysis_data[callback.from_user.id] = {
+                "search_type": search_type,
+                "search_value": search_value,
+                "results": []
+            }
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="💬 Задать вопрос нейросети", callback_data="ai_free_search")]
+            ])
+            extra_text = "🔹 Попробуйте задать вопрос нейросети ниже.\n"
+        else:
+            keyboard = get_main_keyboard()
+            extra_text = ""
 
         await callback.message.answer(
             f"{status_icon} *{title}*\n\n"
             f"🔹 Тип: `{search_type}`\n"
             f"🔹 Значение: `{search_value}`\n"
-            f"📅 _Дата запроса: {created_formatted}_\n\n",
+            f"{info_line}"
+            f"📅 _Дата запроса: {created_formatted}_\n"
+            f"{extra_text}",
             parse_mode="Markdown",
-            reply_markup=get_main_keyboard()
+            reply_markup=keyboard
         )
         return
 
@@ -245,7 +272,7 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
             return
 
         profile_text = format_github_profile(user, repos_stats)
-        full_text = f"{profile_text}\n\n📅 _Запрос из истории: {created_formatted}_"
+        full_text = f"{profile_text}\n📅 _Запрос из истории: {created_formatted}_"
         username = user.get("login")
 
         await callback.message.answer(
@@ -270,7 +297,7 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
             return
 
         compare_text = format_github_compare(user1, stats1, user2, stats2)
-        full_text = f"{compare_text}\n\n📅 _Запрос из истории: {created_formatted}_"
+        full_text = f"{compare_text}\n📅 _Запрос из истории: {created_formatted}_"
 
         await callback.message.answer(
             full_text,
@@ -282,7 +309,15 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
     # ФИО: генерируем Excel-файл
     # ==========================================
     elif search_type == 'fio':
+        # Сохранение данных для ИИ-анализа
+        ai_analysis_data[callback.from_user.id] = {
+            "search_type": "fio",
+            "search_value": search_value,
+            "results": results
+        }
+
         filepath = create_excel_file_fns(search_value, results)
+
         caption = (
             f"📁 *Результаты из истории: ФИО {search_value}*\n"
             f"🔹 Найдено записей: *{len(results)}*\n"
@@ -294,7 +329,11 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
         await callback.message.answer_document(
             document=FSInputFile(filepath),
             caption=caption,
-            parse_mode="Markdown"
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🤖 AI-анализ результатов", callback_data="ai_analyze_fio")],
+                [InlineKeyboardButton(text="💬 Задать вопрос нейросети", callback_data="ai_free_search")]
+            ])
         )
 
         try:
@@ -306,7 +345,18 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
     # ТЕЛЕФОН: генерируем Excel-файл
     # ==========================================
     elif search_type == 'phone':
+        # Сохранение данных для ИИ-анализа
+        ai_analysis_data[callback.from_user.id] = {
+            "search_type": "phone",
+            "search_value": search_value,
+            "results": results
+        }
+
+        # Новые данные о номере из БД
+        phone_info = request_data.get("phone_info")
+
         filepath = create_excel_file_phone(search_value, results)
+
         caption = (
             f"📁 *Результаты из истории: Телефон {search_value}*\n"
             f"🔹 Найдено организаций: *{len(results)}*\n"
@@ -314,11 +364,55 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
             f"🔹 📅 Дата исходного запроса: {created_formatted}"
         )
 
+        if phone_info:
+            caption += f"\n📡 {phone_info} _(первый оператор, текущий может отличаться)_"
+
         await bot.send_chat_action(chat_id=callback.message.chat.id, action="upload_document")
         await callback.message.answer_document(
             document=FSInputFile(filepath),
             caption=caption,
-            parse_mode="Markdown"
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🤖 AI-анализ результатов", callback_data="ai_analyze_phone")],
+                [InlineKeyboardButton(text="💬 Задать вопрос нейросети", callback_data="ai_free_search")]
+            ])
+        )
+
+        try:
+            os.remove(filepath)
+        except Exception as e:
+            logger.error(f"Не удалось удалить файл: {e}")
+
+    # ==========================================
+    # USERNAME: генерируем Excel-файл
+    # ==========================================
+    elif search_type == 'username':
+        # Сохранение данных для ИИ-анализа
+        ai_analysis_data[callback.from_user.id] = {
+            "search_type": "username",
+            "search_value": search_value,
+            "results": results
+        }
+
+        filepath = create_excel_file_username(search_value, results)
+
+        caption = (
+            f"📁 *Результаты из истории: Username {search_value}*\n"
+            f"🔹 Найдено профилей: *{len(results)}*\n"
+            f"🔹 Источник: мультиплатформенная база (27 сайтов)\n"
+            f"🔹 📅 Дата исходного запроса: {created_formatted}"
+            f"\n⚠️ _Внимание: некоторые ссылки могут быть неточными (ложные срабатывания). Рекомендуем проверять ключевые профили вручную._"
+        )
+
+        await bot.send_chat_action(chat_id=callback.message.chat.id, action="upload_document")
+        await callback.message.answer_document(
+            document=FSInputFile(filepath),
+            caption=caption,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🤖 AI-анализ профилей", callback_data="ai_analyze_username")],
+                [InlineKeyboardButton(text="💬 Задать вопрос нейросети", callback_data="ai_free_search")]
+            ])
         )
 
         try:
@@ -334,7 +428,6 @@ async def handle_history_download(callback: types.CallbackQuery, state: FSMConte
 async def handle_history_export_all(callback: types.CallbackQuery, state: FSMContext):
     """Обработчик экспорта всей истории в один Excel-файл."""
     await callback.answer("⏳ Формирую полную историю...")
-
     history = get_user_history(callback.from_user.id, limit=1000)
 
     if not history:
@@ -387,7 +480,8 @@ async def handle_history_export_all(callback: types.CallbackQuery, state: FSMCon
             'phone': '📱 Телефон',
             'github': '🐙 GitHub',
             'github_compare': '⚔️ GitHub сравнение',
-            'plate': '🚗 Госномер'
+            'plate': '🚗 Госномер',
+            'username': '🌐 Username'
         }
         search_type_text = search_type_map.get(req['search_type'], req['search_type'])
 

@@ -9,15 +9,13 @@ from aiogram.types import FSInputFile, InlineKeyboardMarkup, InlineKeyboardButto
 
 from states import SearchStates
 from config import SEARCH_COOLDOWN
-from utils.validators import validate_phone
+from utils.validators import validate_username
 from utils.keyboards import get_main_keyboard, get_cancel_keyboard
-from utils.excel_generator import create_excel_file_phone
-from parsers.phone_parser import search_phone_org
+from utils.excel_generator import create_excel_file_username
+from parsers.username_parser import search_username
 from core import bot, user_last_search, cancel_events, pending_cache_queries
 
-# Импорты для ИИ-анализа
-from handlers.fio_search import ai_analysis_data
-from utils.ai_analyzer import analyze_search_results
+from utils.ai_analyzer import analyze_search_results, ai_answer_query
 
 from utils.database import (
     get_or_create_user,
@@ -31,12 +29,16 @@ from utils.database import (
 
 router = Router()
 
-@router.message(SearchStates.waiting_for_phone, lambda message: message.text and not message.text.startswith('/'))
-async def process_phone_input(message: types.Message, state: FSMContext):
-    """Обработчик ввода номера телефона для поиска организаций."""
+# Хранилище последних результатов для AI-анализа (user_id -> данные)
+# Переиспользуем общее хранилище из fio_search.py
+from handlers.fio_search import ai_analysis_data
 
-    # ОТЛАДКА
-    print(f"🔍 [DEBUG] process_phone_input вызвана! Текст: '{message.text}'")
+
+@router.message(SearchStates.waiting_for_username, lambda message: message.text and not message.text.startswith('/'))
+async def process_username_input(message: types.Message, state: FSMContext):
+    """Обработчик ввода username для поиска по платформам."""
+
+    print(f"🔍 [DEBUG] process_username_input вызвана! Текст: '{message.text}'")
     print(f"🔍 [DEBUG] Состояние FSM: {await state.get_state()}")
 
     user_id = message.from_user.id
@@ -49,25 +51,31 @@ async def process_phone_input(message: types.Message, state: FSMContext):
         return
 
     # Валидация
-    valid_phone = validate_phone(message.text)
-    if not valid_phone:
-        await message.answer("❌ Неверный формат номера. Пожалуйста, введите корректный российский номер (11 цифр).")
+    username = message.text.strip()
+    if not validate_username(username):
+        await message.answer(
+            "❌ Неверный формат username.\n\n"
+            "Допускаются: латинские буквы, цифры, символы `.` `_` `-`\n"
+            "Длина: от 3 до 30 символов\n"
+            "Ник не может состоять только из цифр.\n"
+            "Примеры: john_doe, user123, my.profile"
+        )
         return
 
     # Таймер ставим ТОЛЬКО после успешной валидации
     user_last_search[user_id] = now
 
-    # Удаление сообщения-запроса
+    # Удаляем сообщение-запрос
     data = await state.get_data()
-    phone_msg_id = data.get('phone_request_msg_id')
+    username_msg_id = data.get('username_request_msg_id')
     chat_id = data.get('chat_id')
-    if phone_msg_id and chat_id:
+    if username_msg_id and chat_id:
         try:
-            await bot.delete_message(chat_id=chat_id, message_id=phone_msg_id)
+            await bot.delete_message(chat_id=chat_id, message_id=username_msg_id)
         except Exception as e:
-            logging.error(f"Не удалось удалить сообщение с запросом телефона: {e}")
+            logging.error(f"Не удалось удалить сообщение с запросом username: {e}")
 
-    # Удаление сообщения пользователя с введённым номером
+    # Удаляем сообщение пользователя
     try:
         await message.delete()
     except Exception:
@@ -83,31 +91,29 @@ async def process_phone_input(message: types.Message, state: FSMContext):
     # ============================================================
     # ПРОВЕРКА КЭША
     # ============================================================
-    cached_results = check_cache('phone', valid_phone, 'listorg')
+    cached_results = check_cache('username', username, 'multiplatform')
 
     if cached_results:
-        cache_date = get_cache_date('phone', valid_phone, 'listorg')
+        cache_date = get_cache_date('username', username, 'multiplatform')
         days_ago = (datetime.now() - datetime.strptime(cache_date, '%Y-%m-%d')).days
 
-        # Сохраняем данные запроса во временный словарь
         pending_cache_queries[user_id] = {
-            "search_type": "phone",
-            "search_value": valid_phone,
-            "source": "listorg"
+            "search_type": "username",
+            "search_value": username,
+            "source": "multiplatform"
         }
 
-        # Короткие callback_data
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="⚡ Быстрый ответ (из кэша)",
-                    callback_data=f"cq_phone_quick_{user_id}"
+                    callback_data=f"cq_username_quick_{user_id}"
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="🔄 Новый поиск (актуальные данные)",
-                    callback_data=f"cq_phone_new_{user_id}"
+                    callback_data=f"cq_username_new_{user_id}"
                 )
             ],
             [
@@ -119,39 +125,38 @@ async def process_phone_input(message: types.Message, state: FSMContext):
         ])
 
         await message.answer(
-            f"✅ *Номер:* `{valid_phone}` уже найден в базе данных\n"
+            f"✅ *Username:* `{username}` уже найден в базе данных\n"
             f"📅 Дата последнего обновления: *{cache_date}* ({days_ago} дн. назад)\n"
-            f"🏢 Найдено организаций: *{len(cached_results)}*\n\n"
+            f"🌐 Найдено профилей: *{len(cached_results)}*\n\n"
             f"Выберите действие:",
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
-        return  # Выходим, дальше обработают callback'и
+        return
 
     # ============================================================
     # КЭША НЕТ — запускаем полноценный поиск
     # ============================================================
-    await message.answer(f"✅ Номер принят: `{valid_phone}`", parse_mode="Markdown")
+    await message.answer(f"✅ *Username принят:* `{username}`", parse_mode="Markdown")
 
     await state.set_state(SearchStates.searching)
     cancel_event = asyncio.Event()
     cancel_events[user_id] = cancel_event
 
     loading_msg = await message.answer(
-        "⏳ *Идёт поиск по номеру телефона...*\n\n"
-        "Пожалуйста, подождите. Это может занять несколько минут.\n\n"
+        "⏳ *Идёт поиск username по платформам...*\n\n"
+        "Бот проверяет наличие этого ника на множестве сайтов (GitHub, VK, Telegram и др.).\n\n"
+        "Пожалуйста, подождите. Это может занять 1-2 минуты.\n\n"
         "Вы можете отменить поиск в любой момент.",
         reply_markup=get_cancel_keyboard(),
         parse_mode="Markdown"
     )
 
-    request_id = create_request(user_db_id, 'phone', valid_phone, 'listorg')
+    request_id = create_request(user_db_id, 'username', username, 'multiplatform')
     start_time = time.time()
 
-    result = await search_phone_org(valid_phone, cancel_event)
+    result = await search_username(username, cancel_event)
     execution_time_ms = int((time.time() - start_time) * 1000)
-    # Извлечение данных о номере только один раз, в самом начале
-    phone_info = result.get("phone_info")
 
     if result.get("cancelled"):
         update_request_error(request_id, 'cancelled', 'Отменено пользователем')
@@ -173,22 +178,20 @@ async def process_phone_input(message: types.Message, state: FSMContext):
         return
 
     if not result.get("found"):
-        update_request_success(request_id, [], execution_time_ms, phone_info=phone_info)
+        update_request_success(request_id, [], execution_time_ms)
 
         # Сохраняем пустые результаты для AI-вопроса
         ai_analysis_data[user_id] = {
-            "search_type": "phone",
-            "search_value": valid_phone,
+            "search_type": "username",
+            "search_value": username,
             "results": []
         }
 
-        # Данные о номере (регион и оператор)
-        info_line = f"📡 {phone_info} _(первый зарегистрированный оператор, текущий может отличаться)_\n" if phone_info else ""
         await message.answer(
-            f"*По номеру: {valid_phone}*\n"
-            f"{info_line}"
-            f"🔹 Организаций не найдено\n"
-            f"🔹 Возможно, номер не зарегистрирован на юридическое лицо.\n"
+            f"*По username: {username}*\n\n"
+            f"🌐 Профилей не найдено\n"
+            f"🔹 Проверено сайтов: *{result['checked']}*\n"
+            f"🔹 Возможно, этот ник не используется или используется редко.\n"
             f"🔹 Иногда при поиске возникают ошибки и результат не показывается. Попробуйте повторить поиск.\n"
             f"🔹 Вы можете задать вопрос нейросети по кнопке ниже.",
             parse_mode="Markdown",
@@ -199,38 +202,37 @@ async def process_phone_input(message: types.Message, state: FSMContext):
         )
         return
 
-    update_request_success(request_id, result['results'], execution_time_ms, phone_info=phone_info)
-    save_to_cache('phone', valid_phone, 'listorg', result['results'], phone_info=phone_info)
+    # Успешный поиск
+    update_request_success(request_id, result['results'], execution_time_ms)
+    save_to_cache('username', username, 'multiplatform', result['results'])
 
-    # Сохранение результатов для ИИ-анализа
+    # Сохраняем результаты для AI-анализа
     ai_analysis_data[user_id] = {
-        "search_type": "phone",
-        "search_value": valid_phone,
+        "search_type": "username",
+        "search_value": username,
         "results": result['results']
     }
 
-    # ==========================================
-    # Формирование и отправка Excel
-    # ==========================================
-    # Данные о номере (регион и оператор)
-    info_line = f"📡 {phone_info} _(первый зарегестрированный оператор, текущий может отличаться)_\n" if phone_info else ""
+    await _show_username_results(message, username, result)
 
+
+async def _show_username_results(message: types.Message, username: str, result: dict):
+    """Показывает результаты поиска по username (Excel + AI-кнопки)."""
     await message.answer(
-        f"{info_line}"
-        f"📊 *Найдено организаций: {result['count']}*. Формирую Excel-файл...",
+        f"🌐 *Найдено профилей: {result['count']}* из {result['checked']} проверенных сайтов. "
+        f"Формирую Excel-файл...",
         parse_mode="Markdown"
     )
 
-    filepath = create_excel_file_phone(valid_phone, result['results'])
+    filepath = create_excel_file_username(username, result['results'])
 
     caption_text = (
-        f"📁 *Результаты поиска по телефону: {valid_phone}*\n"
-        f"🔹 Найдено организаций: *{result['count']}*\n"
-        f"🔹 Источник: list-org.com"
+        f"📁 *Результаты поиска по username: {username}*\n"
+        f"🔹 Найдено профилей: *{result['count']}*\n"
+        f"🔹 Проверено сайтов: *{result['checked']}*\n"
+        f"🔹 Ошибок проверки: *{result['errors']}*"
+        f"\n⚠️ _Внимание: некоторые ссылки могут быть неточными (ложные срабатывания). Рекомендуем проверять ключевые профили вручную._"
     )
-    # Данные о номере в caption
-    if phone_info:
-        caption_text += f"\n📡 {phone_info} _(первый зарегестрированный оператор, текущий может отличаться)_"
 
     await bot.send_chat_action(chat_id=message.chat.id, action="upload_document")
     await message.answer_document(
@@ -238,7 +240,7 @@ async def process_phone_input(message: types.Message, state: FSMContext):
         caption=caption_text,
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🤖 AI-анализ результатов", callback_data="ai_analyze_phone")],
+            [InlineKeyboardButton(text="🤖 AI-анализ профилей", callback_data="ai_analyze_username")],
             [InlineKeyboardButton(text="💬 Задать вопрос нейросети", callback_data="ai_free_search")],
             [InlineKeyboardButton(text="🏠 В главное меню", callback_data="back_to_menu")]
         ])
@@ -251,12 +253,12 @@ async def process_phone_input(message: types.Message, state: FSMContext):
 
 
 # ==========================================
-# ИИ-АНАЛИЗ: Анализ результатов поиска по телефону
+# ИИ-АНАЛИЗ: Анализ найденных профилей
 # ==========================================
-@router.callback_query(F.data == "ai_analyze_phone")
-async def handle_ai_analyze_phone(callback: types.CallbackQuery):
-    """Обработчик кнопки AI-анализа для поиска по номеру телефона."""
-    await callback.answer("🤖 Запускаю AI-анализ...")
+@router.callback_query(F.data == "ai_analyze_username")
+async def handle_ai_analyze_username(callback: types.CallbackQuery):
+    """Обработчик кнопки AI-анализа для поиска по username."""
+    await callback.answer("🤖 Запускаю AI-анализ профилей...")
 
     user_id = callback.from_user.id
     data = ai_analysis_data.get(user_id)
@@ -269,7 +271,8 @@ async def handle_ai_analyze_phone(callback: types.CallbackQuery):
         return
 
     loading_msg = await callback.message.answer(
-        "⏳ Нейросеть анализирует данные...\nЭто может занять до минуты."
+        "⏳ Нейросеть анализирует найденные профили...\n"
+        "Это может занять до минуты."
     )
 
     # Вызов нейросети
@@ -280,16 +283,13 @@ async def handle_ai_analyze_phone(callback: types.CallbackQuery):
     )
 
     response_text = (
-        f"🤖 AI-анализ по запросу: {data['search_value']}\n\n"
+        f"🤖 AI-анализ профилей для username: {data['search_value']}\n\n"
         f"{analysis}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"💡 Анализ выполнен с помощью нейросети. Рекомендуется проверять важную информацию."
     )
 
-    # Защита от лимита Telegram (4096 символов)
     if len(response_text) > 4096:
         response_text = response_text[:4090] + "…"
 
-    # Отправка без parse_mode, т.к. текст от нейросети может содержать
-    # символы *, _, [, которые мешают Markdown-разметке
     await loading_msg.edit_text(response_text)

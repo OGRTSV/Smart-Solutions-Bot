@@ -34,6 +34,7 @@ def validate_github_username(username: str) -> str | None:
     - Только латинские буквы, цифры и дефисы
     - Не может начинаться или заканчиваться дефисом
     - Не может содержать два дефиса подряд
+    - Не может состоять только из цифр
 
     Args:
         username: Введённый никнейм
@@ -56,6 +57,11 @@ def validate_github_username(username: str) -> str | None:
     if not re.match(r'^[a-z0-9-]+$', cleaned):
         return None
 
+    # Запрет никнеймов, состоящих только из цифр
+    # (GitHub не разрешает регистрировать чисто цифровые имена)
+    if cleaned.isdigit():
+        return None
+
     # Не может начинаться или заканчиваться дефисом
     if cleaned.startswith("-") or cleaned.endswith("-"):
         return None
@@ -65,3 +71,39 @@ def validate_github_username(username: str) -> str | None:
         return None
 
     return cleaned
+
+
+import re
+
+
+def validate_username(username: str) -> bool:
+    """
+    Проверяет корректность username.
+
+    Правила:
+    - Латинские буквы, цифры, символы . _ -
+    - Длина от 3 до 30 символов
+    - Не начинается и не заканчивается на . _ -
+    - Не состоит только из цифр (не может быть номером телефона)
+    """
+    if not username:
+        return False
+
+    # Длина
+    if len(username) < 3 or len(username) > 30:
+        return False
+
+    # Допустимые символы
+    if not re.match(r'^[a-zA-Z0-9._-]+$', username):
+        return False
+
+    # Запрет никнеймов, состоящих только из цифр
+    # (вроде практически ни одна платформа не разрешает чисто цифровые публичные имена)
+    if username.isdigit():
+        return False
+
+    # Не начинается и не заканчивается на специальные символы
+    if username[0] in '._-' or username[-1] in '._-':
+        return False
+
+    return True

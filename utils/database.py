@@ -58,6 +58,13 @@ def init_database():
             )
         """)
 
+        # Миграция: добавляем колонку phone_info, если её ещё нет
+        cursor.execute("PRAGMA table_info(requests)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if 'phone_info' not in columns:
+            cursor.execute("ALTER TABLE requests ADD COLUMN phone_info TEXT")
+            logger.info("✅ Миграция: добавлена колонка phone_info в requests")
+
         # Таблица кэша результатов
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS cache (
@@ -71,6 +78,13 @@ def init_database():
                 UNIQUE(search_type, search_value, source)
             )
         """)
+
+        # Миграция: добавляем колонку phone_info в cache
+        cursor.execute("PRAGMA table_info(cache)")
+        cache_columns = [row[1] for row in cursor.fetchall()]
+        if 'phone_info' not in cache_columns:
+            cursor.execute("ALTER TABLE cache ADD COLUMN phone_info TEXT")
+            logger.info("✅ Миграция: добавлена колонка phone_info в cache")
 
         # Таблица логов ошибок
         cursor.execute("""
@@ -176,7 +190,7 @@ def create_request(user_id: int, search_type: str, search_value: str, source: st
         raise
 
 
-def update_request_success(request_id: int, results: List[Dict], execution_time_ms: int):
+def update_request_success(request_id: int, results: List[Dict], execution_time_ms: int, phone_info: str = None):
     """
     Обновляет запрос после успешного выполнения.
 
@@ -184,6 +198,7 @@ def update_request_success(request_id: int, results: List[Dict], execution_time_
         request_id: ID запроса
         results: Список результатов поиска
         execution_time_ms: Время выполнения в миллисекундах
+        phone_info: 🆕 Данные о номере (регион/оператор) — опционально
     """
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -199,9 +214,10 @@ def update_request_success(request_id: int, results: List[Dict], execution_time_
                     results_count = ?,
                     execution_time_ms = ?,
                     results_json = ?,
-                    completed_at = ?
+                    completed_at = ?,
+                    phone_info = ?
                 WHERE id = ?
-            """, (len(results), execution_time_ms, results_json, completed_time, request_id))
+            """, (len(results), execution_time_ms, results_json, completed_time, phone_info, request_id))
 
         conn.commit()
         conn.close()
@@ -212,7 +228,7 @@ def update_request_success(request_id: int, results: List[Dict], execution_time_
         raise
 
 
-def update_request_error(request_id: int, error_type: str, error_message: str):
+def update_request_error(request_id: int, error_type: str, error_message: str, phone_info: str = None):
     """
     Обновляет запрос при ошибке или отмене.
 
@@ -220,26 +236,33 @@ def update_request_error(request_id: int, error_type: str, error_message: str):
         request_id: ID запроса
         error_type: Тип ошибки ('cancelled', 'not_found', 'parser_error', 'error' и др.)
         error_message: Текст ошибки
+        phone_info: Данные о номере (регион/оператор) — опционально (нужно, когда поиск завершился, но организаций нет)
     """
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
         # Маппинг типа ошибки в корректный статус
-        # Отмена и специфичные типы сохраняются как есть,
-        # всё остальное становится обычной ошибкой 'error'
         status_mapping = {
-            'cancelled': 'cancelled',  # Отмена пользователем
-            'not_found': 'not_found',  # Не найдено (404)
-            'parser_error': 'parser_error'  # Ошибка парсинга
+            'cancelled': 'cancelled',
+            'not_found': 'not_found',
+            'parser_error': 'parser_error'
         }
         status = status_mapping.get(error_type, 'error')
 
-        cursor.execute("""
-            UPDATE requests 
-            SET status = ?, completed_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """, (status, request_id))
+        # Обновляем статус + сохраняем phone_info (если передан)
+        if phone_info is not None:
+            cursor.execute("""
+                UPDATE requests 
+                SET status = ?, completed_at = CURRENT_TIMESTAMP, phone_info = ?
+                WHERE id = ?
+            """, (status, phone_info, request_id))
+        else:
+            cursor.execute("""
+                UPDATE requests 
+                SET status = ?, completed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (status, request_id))
 
         # Логируем ошибку (только для настоящих ошибок, не для отмен)
         if error_type != 'cancelled':
@@ -324,8 +347,9 @@ def get_request_results(request_id: int) -> Optional[Dict]:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
+        # новый phone_info в SELECT
         cursor.execute("""
-            SELECT search_type, search_value, source, results_json, created_at, status
+            SELECT search_type, search_value, source, results_json, created_at, status, phone_info
             FROM requests
             WHERE id = ?
         """, (request_id,))
@@ -342,7 +366,8 @@ def get_request_results(request_id: int) -> Optional[Dict]:
             'source': row[2],
             'results': json.loads(row[3]) if row[3] else [],
             'created_at': row[4],
-            'status': row[5]
+            'status': row[5],
+            'phone_info': row[6]
         }
 
     except Exception as e:
@@ -391,7 +416,8 @@ def check_cache(search_type: str, search_value: str, source: str) -> Optional[Li
         return None
 
 
-def save_to_cache(search_type: str, search_value: str, source: str, results: List[Dict], cache_days: int = 30):
+def save_to_cache(search_type: str, search_value: str, source: str, results: List[Dict], cache_days: int = 30,
+                  phone_info: str = None):
     """
     Сохраняет результаты в кэш (заменяет старые данные при наличии).
 
@@ -401,6 +427,7 @@ def save_to_cache(search_type: str, search_value: str, source: str, results: Lis
         source: Источник
         results: Результаты поиска
         cache_days: Срок хранения кэша в днях (по умолчанию 30)
+        phone_info: 🆕 Данные о номере (регион/оператор) — опционально
     """
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -408,24 +435,24 @@ def save_to_cache(search_type: str, search_value: str, source: str, results: Lis
 
         results_json = json.dumps(results, ensure_ascii=False)
         expires_at = (datetime.now() + timedelta(days=cache_days)).isoformat()
-        # Используем локальное время Python
         created_at = datetime.now().isoformat()
 
         # Удаление старой записи
         cursor.execute("""
-                DELETE FROM cache 
-                WHERE search_type = ? AND search_value = ? AND source = ?
-            """, (search_type, search_value, source))
+        DELETE FROM cache
+        WHERE search_type = ? AND search_value = ? AND source = ?
+        """, (search_type, search_value, source))
 
-        # Вставка новой с локальным временем
+        # Вставка новой с локальным временем и phone_info
         cursor.execute("""
-                INSERT INTO cache 
-                (search_type, search_value, source, results_json, expires_at, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (search_type, search_value, source, results_json, expires_at, created_at))
+        INSERT INTO cache
+        (search_type, search_value, source, results_json, expires_at, created_at, phone_info)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (search_type, search_value, source, results_json, expires_at, created_at, phone_info))
 
         conn.commit()
         conn.close()
+
         logger.info(f"Результаты сохранены в кэш: {search_type}={search_value} (срок: {cache_days} дней)")
 
     except Exception as e:
@@ -536,4 +563,39 @@ def get_cache_date(search_type: str, search_value: str, source: str) -> Optional
 
     except Exception as e:
         logger.error(f"Ошибка получения даты кэша: {e}")
+        return None
+
+
+def get_cache_phone_info(search_type: str, search_value: str, source: str) -> Optional[str]:
+    """
+    Получает phone_info из кэша.
+
+    Args:
+        search_type: Тип поиска
+        search_value: Искомое значение
+        source: Источник
+
+    Returns:
+        phone_info или None
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+        SELECT phone_info
+        FROM cache
+        WHERE search_type = ? AND search_value = ? AND source = ?
+        """, (search_type, search_value, source))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return None
+
+        return row[0]
+
+    except Exception as e:
+        logger.error(f"Ошибка получения phone_info из кэша: {e}")
         return None

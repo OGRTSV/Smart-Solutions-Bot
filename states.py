@@ -10,3 +10,5 @@ class SearchStates(StatesGroup):
     waiting_github_compare_1 = State()
     waiting_github_compare_2 = State()
     searching = State()
+    waiting_for_ai_query = State()
+    waiting_for_username = State()
